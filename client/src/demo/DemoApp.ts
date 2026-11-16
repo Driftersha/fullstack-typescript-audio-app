@@ -1,3 +1,4 @@
+import logoUrl from '../assets/sprite/icon-logo.svg';
 interface Track { id:string; title:string; artist:string; url:string; origin:'local'|'cc0'; source?:string }
 interface CatalogEntry { file:string; title:string; artist:string; sourceUrl:string }
 function time(s:number):string {return Number.isFinite(s)&&s>=0 ? `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}` : '0:00';}
@@ -25,6 +26,8 @@ export class DemoApp {
   private selected:string|null=null;
   private favoritesOnly=false;
   private repeat=false;
+  private shuffle=false;
+  private readonly durationById=new Map<string,number>();
   private sequence=0;
   private query='';
   private list!:HTMLElement;
@@ -42,19 +45,40 @@ export class DemoApp {
     this.el.innerHTML=`
     <div class="demo__shell">
       <aside class="demo__sidebar">
-        <a href="#/tracks" class="demo__brand">◉ AUDIO<span>PLAYER</span></a>
-        <p class="demo__eyebrow">HAKVIRA · PORTFOLIO</p>
-        <nav class="demo__nav"><button id="all" class="is-active" type="button">♫ Все треки</button><button id="favorites" type="button">♡ Избранное</button></nav>
-        <p class="demo__privacy">Файлы остаются на вашем устройстве.</p>
+        <a href="#/tracks" class="demo__brand" aria-label="Главная — аудиокомпозиции"><img src="${logoUrl}" alt="Vibe Music" width="185" height="31"></a>
+        <nav class="demo__nav" aria-label="Разделы плеера">
+          <button id="favorites" type="button"><span aria-hidden="true">♡</span> Избранное</button>
+          <button id="all" class="is-active" type="button"><span aria-hidden="true">♫</span> Аудиокомпозиции</button>
+        </nav>
       </aside>
+      <header class="demo__header">
+        <label class="demo__search-box"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Поиск по названию или исполнителю" aria-label="Поиск по музыке"></label>
+        <div class="demo__account" aria-label="Демонстрационный режим"><span class="demo__avatar" aria-hidden="true">♫</span><span>Гость</span><span class="demo__chevron" aria-hidden="true">⌄</span></div>
+      </header>
       <main class="demo__main">
-        <div class="demo__top"><span>WEB AUDIO EXPERIENCE</span><span>DEMO MODE</span></div>
-        <section class="demo__hero"><p>ТВОЯ МУЗЫКА · ТВОЙ РИТМ</p><h1>Слушай по-своему<span>.</span></h1><p>Полноценный аудиоплеер без регистрации и загрузки файлов на сервер.</p><label class="demo__upload">＋ Добавить MP3<input id="files" type="file" accept=".mp3,audio/mpeg" multiple></label></section>
-        <section class="demo__library"><div class="demo__library-head"><h2>Музыкальная библиотека</h2><span id="count">0 треков</span></div><input id="search" type="search" placeholder="Поиск по названию или исполнителю" aria-label="Поиск по библиотеке"><p id="status" role="status"></p><div id="list"></div></section>
-        <p class="demo__footnote">Публичный CC0-каталог будет подключён после проверки файлов и лицензий. <a href="https://creativecommons.org/publicdomain/zero/1.0/" target="_blank" rel="noopener noreferrer">Что такое CC0</a></p>
+        <section class="demo__library">
+          <div class="demo__library-head"><h1>Аудиофайлы и треки</h1><label class="demo__upload">＋ Добавить MP3<input id="files" type="file" accept=".mp3,audio/mpeg" multiple></label></div>
+          <div class="demo__table-head" aria-hidden="true"><span>№</span><span>Название</span><span>Альбом</span><span>Добавлено</span><span>Длительность</span><span></span></div>
+          <p id="status" role="status" aria-live="polite"></p>
+          <div id="list" class="demo__rows"></div>
+          <p class="demo__footnote"><span id="count">0 треков</span> · Без регистрации: ваши файлы остаются на устройстве. <a href="https://creativecommons.org/publicdomain/zero/1.0/" target="_blank" rel="noopener noreferrer">О лицензии CC0</a></p>
+        </section>
       </main>
     </div>
-    <footer class="demo__player"><div class="demo__playing"><strong id="now">Трек не выбран</strong><span id="nowArtist">Добавьте MP3 для прослушивания</span></div><div class="demo__center"><div class="demo__controls"><button id="repeat" type="button" aria-pressed="false">↻</button><button id="prev" type="button" aria-label="Предыдущий трек">⏮</button><button id="play" type="button" aria-label="Воспроизвести или поставить на паузу">▶</button><button id="next" type="button" aria-label="Следующий трек">⏭</button></div><div class="demo__timeline"><input id="progress" type="range" min="0" max="100" value="0" step="0.1" aria-label="Позиция трека"><span id="clock">0:00 / 0:00</span></div></div><label class="demo__volume">♫ <input id="volume" type="range" min="0" max="1" step="0.01" value="0.85" aria-label="Громкость"></label></footer>`;
+    <footer class="demo__player">
+      <div class="demo__playing"><div class="demo__player-art" aria-hidden="true">♫</div><div class="demo__player-info"><strong id="now">Нет трека</strong><span id="nowArtist">Добавьте MP3</span></div></div>
+      <div class="demo__center">
+        <div class="demo__controls">
+          <button id="repeat" type="button" aria-pressed="false" aria-label="Повтор трека">↻</button>
+          <button id="prev" type="button" aria-label="Предыдущий трек">⏮</button>
+          <button id="play" type="button" aria-label="Воспроизвести или поставить на паузу">▶</button>
+          <button id="next" type="button" aria-label="Следующий трек">⏭</button>
+          <button id="shuffle" type="button" aria-pressed="false" aria-label="Случайный порядок">⇄</button>
+        </div>
+        <div class="demo__timeline"><input id="progress" type="range" min="0" max="100" value="0" step="0.1" aria-label="Позиция трека"><span id="clock">0:00 / 0:00</span></div>
+      </div>
+      <label class="demo__volume"><span aria-hidden="true">♫</span><input id="volume" type="range" min="0" max="1" step="0.01" value="0.85" aria-label="Громкость"></label>
+    </footer>`;
     const el=<T extends Element>(id:string)=>this.el.querySelector<T>('#'+id)!;
     this.list=el('list');this.status=el('status');this.count=el('count');this.now=el('now');
     this.nowArtist=el('nowArtist');this.playBtn=el('play');this.progress=el('progress');
@@ -72,12 +96,17 @@ export class DemoApp {
     this.playBtn.onclick=()=>{void this.toggle();};
     el<HTMLButtonElement>('prev').onclick=()=>this.skip(-1);
     el<HTMLButtonElement>('next').onclick=()=>this.skip(1);
-    el<HTMLButtonElement>('repeat').onclick=()=>{this.repeat=!this.repeat;this.audio.loop=this.repeat;el<HTMLButtonElement>('repeat').setAttribute('aria-pressed',String(this.repeat));};
+    el<HTMLButtonElement>('shuffle').onclick=()=>{
+      this.shuffle=!this.shuffle;
+      if(this.shuffle){this.repeat=false;this.audio.loop=false;el<HTMLButtonElement>('repeat').setAttribute('aria-pressed','false');}
+      el<HTMLButtonElement>('shuffle').setAttribute('aria-pressed',String(this.shuffle));
+    };
+    el<HTMLButtonElement>('repeat').onclick=()=>{this.repeat=!this.repeat;if(this.repeat){this.shuffle=false;el<HTMLButtonElement>('shuffle').setAttribute('aria-pressed','false');}this.audio.loop=this.repeat;el<HTMLButtonElement>('repeat').setAttribute('aria-pressed',String(this.repeat));};
     this.progress.oninput=()=>{if(Number.isFinite(this.audio.duration)&&this.audio.duration>0)this.audio.currentTime=Number(this.progress.value)/100*this.audio.duration;};
     const volume=el<HTMLInputElement>('volume');this.audio.volume=Number(volume.value);
     volume.oninput=()=>{this.audio.volume=Number(volume.value);};
     this.audio.addEventListener('timeupdate',()=>this.updateTime());
-    this.audio.addEventListener('loadedmetadata',()=>this.updateTime());
+    this.audio.addEventListener('loadedmetadata',()=>{if(this.selected&&Number.isFinite(this.audio.duration)){this.durationById.set(this.selected,this.audio.duration);this.render();}this.updateTime();});
     this.audio.addEventListener('play',()=>{this.playBtn.textContent='Ⅱ';});
     this.audio.addEventListener('pause',()=>{this.playBtn.textContent='▶';});
     this.audio.addEventListener('ended',()=>{this.skip(1);});
@@ -109,7 +138,8 @@ export class DemoApp {
   }
   private skip(direction:number){
     if(!this.tracks.length)return;const current=this.tracks.findIndex(t=>t.id===this.selected);
-    const next=current<0?0:(current+direction+this.tracks.length)%this.tracks.length;
+    let next=current<0?0:(current+direction+this.tracks.length)%this.tracks.length;
+    if(this.shuffle&&this.tracks.length>1){next=Math.floor(Math.random()*(this.tracks.length-1));if(next>=current)next++;}
     void this.select(this.tracks[next]);
   }
   private updateTime(){
@@ -133,7 +163,11 @@ export class DemoApp {
       const fav=document.createElement('button');fav.type='button';fav.className='demo__favorite';fav.textContent=this.favorites.has(track.id)?'♥':'♡';
       fav.setAttribute('aria-label',this.favorites.has(track.id)?'Убрать из избранного':'Добавить в избранное');
       fav.onclick=()=>{if(this.favorites.has(track.id))this.favorites.delete(track.id);else this.favorites.add(track.id);this.render();};
-      row.append(open,source,fav);this.list.append(row);
+      const index=document.createElement('span');index.className='demo__track-index';index.textContent=String(visible.indexOf(track)+1);
+      const album=document.createElement('span');album.className='demo__album';album.textContent=track.origin==='cc0'?'CC0 1.0':'—';
+      const date=document.createElement('span');date.className='demo__date';date.textContent='—';
+      const duration=document.createElement('span');duration.className='demo__duration';const seconds=this.durationById.get(track.id);duration.textContent=seconds===undefined?'—':time(seconds);
+      row.append(index,open,album,date,duration,fav);this.list.append(row);
     }
   }
 }
