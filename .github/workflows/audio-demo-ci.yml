@@ -1,0 +1,33 @@
+name: Audio Player demo CI
+on:
+  pull_request:
+    paths:
+      - 'client/**'
+      - '.github/workflows/audio-demo-ci.yml'
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - name: Verify static artifact and no legacy commercial music
+        run: |
+          test -f dist/index.html
+          if find dist -type f | grep -Ei 'the-business|in-bloom-nirvana|gangstas-paradise'; then
+            echo 'Unexpected legacy media in public artifact' >&2
+            exit 1
+          fi
+          if grep -R -l 'localhost:8000' dist --include='*.js'; then
+            echo 'Localhost backend leaked to demo build' >&2
+            exit 1
+          fi
