@@ -4,54 +4,33 @@ const CopyWebpackPlugin = require('copy-webpack-plugin');
 
 module.exports = {
   entry: './src/index.ts',
+  mode: 'production',
   output: {
-    filename: 'bundle.js',
+    filename: 'bundle.[contenthash].js',
     path: path.resolve(__dirname, 'dist'),
+    publicPath: '/',
     clean: true,
   },
-  resolve: {
-    extensions: ['.ts', '.js'],
-  },
+  resolve: { extensions: ['.ts', '.js'] },
   module: {
     rules: [
-      {
-        test: /\.ts$/,
-        use: 'ts-loader',
-        exclude: /node_modules/,
-      },
-      {
-        test: /\.css$/,
-        use: ['style-loader', 'css-loader'],
-      },
-      {
-        test: /\.(png|jpe?g|gif|svg|webp|mp3)$/i,
-        type: 'asset/resource',
-      },
+      { test: /\.ts$/, use: 'ts-loader', exclude: /node_modules/ },
+      { test: /\.css$/, use: ['style-loader', 'css-loader'] },
+      { test: /\.(png|jpe?g|gif|svg|webp|mp3)$/i, type: 'asset/resource' },
     ],
   },
   plugins: [
-    new HtmlWebpackPlugin({
-      template: './src/index.html',
-    }),
+    new HtmlWebpackPlugin({ template: './src/index.html' }),
+    // No copyrighted legacy album images or bundled music are copied.
+    // This folder is absent until the CC0 release assets are explicitly approved.
     new CopyWebpackPlugin({
-      patterns: [
-        { from: 'src/assets/img/sprite.svg', to: 'assets/img/sprite.svg' },
-      ],
+      patterns: [{ from: 'public/audio', to: 'audio', noErrorOnMissing: true }],
     }),
   ],
   devServer: {
-    static: [
-      {
-        directory: path.join(__dirname, 'dist'),
-      },
-      {
-        directory: path.join(__dirname, 'public'),
-      },
-    ],
+    static: { directory: path.join(__dirname, 'dist') },
     port: 3000,
-    open: true,
-    hot: true,
     historyApiFallback: true,
+    hot: true,
   },
-  mode: 'production',
 };
